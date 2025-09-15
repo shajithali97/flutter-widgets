@@ -8368,9 +8368,12 @@ class _CalendarViewState extends State<_CalendarView>
         ));
   }
 
-  // Returns the day view as a child for the calendar view.
+// Returns the day view as a child for the calendar view.
   Widget _addDayView(double width, double height, bool isRTL, String locale,
       bool isCurrentView) {
+    // Add scrollbar width constant
+    const double SCROLLBAR_WIDTH = 16.0;
+
     double viewHeaderWidth = widget.width;
     final double actualViewHeaderHeight =
         CalendarViewHelper.getViewHeaderHeight(
@@ -8383,6 +8386,7 @@ class _CalendarViewState extends State<_CalendarView>
         widget.calendar.timeSlotViewSettings.numberOfDaysInView,
         widget.calendar.timeSlotViewSettings.nonWorkingDays,
         widget.calendar.monthViewSettings.numberOfWeeksInView);
+
     if (isDayView) {
       viewHeaderWidth = timeLabelWidth < 50 ? 50 : timeLabelWidth;
       viewHeaderHeight =
@@ -8398,13 +8402,19 @@ class _CalendarViewState extends State<_CalendarView>
 
     final double allDayExpanderHeight =
         panelHeight * _allDayExpanderAnimation!.value;
+
+    // Calculate content width excluding scrollbar
+    final double contentWidth = width - SCROLLBAR_WIDTH;
+
     return Stack(
       children: <Widget>[
         _addAllDayAppointmentPanel(widget.calendarTheme, isCurrentView),
+
+        // View Header - adjust right positioning for scrollbar
         Positioned(
           left: isRTL ? widget.width - viewHeaderWidth : 0,
           top: 0,
-          right: isRTL ? 0 : widget.width - viewHeaderWidth,
+          right: isRTL ? SCROLLBAR_WIDTH : widget.width - viewHeaderWidth,
           height: actualViewHeaderHeight,
           child: Container(
             color: widget.calendar.viewHeaderStyle.backgroundColor ??
@@ -8440,79 +8450,255 @@ class _CalendarViewState extends State<_CalendarView>
             ),
           ),
         ),
+
+        // Main calendar content area (excluding scrollbar space)
         Positioned(
-            top: isDayView
-                ? viewHeaderHeight + allDayExpanderHeight
-                : viewHeaderHeight + _allDayHeight + allDayExpanderHeight,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Scrollbar(
+          top: isDayView
+              ? viewHeaderHeight + allDayExpanderHeight
+              : viewHeaderHeight + _allDayHeight + allDayExpanderHeight,
+          left: 0,
+          right: 0, // Reserve space for external scrollbar
+          bottom: 0,
+          child: ListView(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 0),
               controller: _scrollController,
-              thumbVisibility: !widget.isMobilePlatform,
-              child: ListView(
-                  padding: EdgeInsets.zero,
-                  controller: _scrollController,
-                  physics: const ClampingScrollPhysics(),
-                  children: <Widget>[
-                    Stack(children: <Widget>[
-                      RepaintBoundary(
-                          child: _CalendarMultiChildContainer(
-                              width: width,
-                              height: height,
-                              children: <Widget>[
-                            RepaintBoundary(
-                              child: TimeSlotWidget(
-                                  widget.visibleDates,
-                                  _horizontalLinesCount!,
-                                  _timeIntervalHeight,
-                                  timeLabelWidth,
-                                  widget.calendar.cellBorderColor,
-                                  widget.calendarTheme,
-                                  widget.calendar.timeSlotViewSettings,
-                                  isRTL,
-                                  widget.regions,
-                                  _calendarCellNotifier,
-                                  widget.textScaleFactor,
-                                  widget.calendar.timeRegionBuilder,
-                                  width,
-                                  height,
-                                  widget.calendar.minDate,
-                                  widget.calendar.maxDate),
+              physics: const ClampingScrollPhysics(),
+              children: <Widget>[
+                Stack(children: <Widget>[
+                  RepaintBoundary(
+                      child: _CalendarMultiChildContainer(
+                          width: contentWidth, // Use reduced width
+                          height: height,
+                          children: <Widget>[
+                        RepaintBoundary(
+                          child: TimeSlotWidget(
+                            widget.visibleDates,
+                            _horizontalLinesCount!,
+                            _timeIntervalHeight,
+                            timeLabelWidth,
+                            widget.calendar.cellBorderColor,
+                            widget.calendarTheme,
+                            widget.calendar.timeSlotViewSettings,
+                            isRTL,
+                            widget.regions,
+                            _calendarCellNotifier,
+                            widget.textScaleFactor,
+                            widget.calendar.timeRegionBuilder,
+                            contentWidth, // Pass reduced width to TimeSlotWidget
+                            height,
+                            widget.calendar.minDate,
+                            widget.calendar.maxDate,
+                          ),
+                        ),
+                        RepaintBoundary(
+                            child: _addAppointmentPainter(
+                                contentWidth, height) // Use reduced width
                             ),
-                            RepaintBoundary(
-                                child: _addAppointmentPainter(width, height)),
-                          ])),
-                      RepaintBoundary(
-                        child: CustomPaint(
-                          painter: _TimeRulerView(
-                              _horizontalLinesCount!,
-                              _timeIntervalHeight,
-                              widget.calendar.timeSlotViewSettings,
-                              widget.calendar.cellBorderColor,
-                              isRTL,
-                              widget.locale,
-                              widget.calendarTheme,
-                              CalendarViewHelper.isTimelineView(widget.view),
-                              widget.visibleDates,
-                              widget.textScaleFactor),
-                          size: Size(timeLabelWidth, height),
-                        ),
+                      ])),
+                  RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _TimeRulerView(
+                        _horizontalLinesCount!,
+                        _timeIntervalHeight,
+                        widget.calendar.timeSlotViewSettings,
+                        widget.calendar.cellBorderColor,
+                        isRTL,
+                        widget.locale,
+                        widget.calendarTheme,
+                        CalendarViewHelper.isTimelineView(widget.view),
+                        widget.visibleDates,
+                        widget.textScaleFactor,
                       ),
-                      RepaintBoundary(
-                        child: CustomPaint(
-                          painter: _addSelectionView(),
-                          size: Size(width, height),
-                        ),
-                      ),
-                      _getCurrentTimeIndicator(
-                          timeLabelWidth, width, height, false),
-                    ])
-                  ]),
-            )),
+                      size: Size(timeLabelWidth, height),
+                    ),
+                  ),
+                  RepaintBoundary(
+                    child: CustomPaint(
+                      painter: _addSelectionView(),
+                      size: Size(contentWidth, height), // Use reduced width
+                    ),
+                  ),
+                  _getCurrentTimeIndicator(
+                      timeLabelWidth,
+                      contentWidth, // Use reduced width
+                      height,
+                      false),
+                ])
+              ]),
+        ),
+
+        // External scrollbar positioned at the right edge
+        Positioned(
+          top: isDayView
+              ? viewHeaderHeight + allDayExpanderHeight
+              : viewHeaderHeight + _allDayHeight + allDayExpanderHeight,
+          right: 0,
+          bottom: 0,
+          width: SCROLLBAR_WIDTH,
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: !widget.isMobilePlatform,
+            trackVisibility: !widget.isMobilePlatform,
+            thickness: SCROLLBAR_WIDTH - 2, // Slightly thinner than container
+            child: Container(
+              width: SCROLLBAR_WIDTH,
+              color: Colors.transparent, // Invisible container for scrollbar
+            ),
+          ),
+        ),
       ],
     );
   }
+
+  // // Returns the day view as a child for the calendar view.
+  // Widget _addDayView(double width, double height, bool isRTL, String locale,
+  //     bool isCurrentView) {
+  //   // Add scrollbar width constant
+  //   const double SCROLLBAR_WIDTH = 16.0;
+  //   double viewHeaderWidth = widget.width;
+  //   final double actualViewHeaderHeight =
+  //       CalendarViewHelper.getViewHeaderHeight(
+  //           widget.calendar.viewHeaderHeight, widget.view);
+  //   double viewHeaderHeight = actualViewHeaderHeight;
+  //   final double timeLabelWidth = CalendarViewHelper.getTimeLabelWidth(
+  //       widget.calendar.timeSlotViewSettings.timeRulerSize, widget.view);
+  //   final bool isDayView = CalendarViewHelper.isDayView(
+  //       widget.view,
+  //       widget.calendar.timeSlotViewSettings.numberOfDaysInView,
+  //       widget.calendar.timeSlotViewSettings.nonWorkingDays,
+  //       widget.calendar.monthViewSettings.numberOfWeeksInView);
+  //   if (isDayView) {
+  //     viewHeaderWidth = timeLabelWidth < 50 ? 50 : timeLabelWidth;
+  //     viewHeaderHeight =
+  //         _allDayHeight > viewHeaderHeight ? _allDayHeight : viewHeaderHeight;
+  //   }
+
+  //   double panelHeight = isCurrentView
+  //       ? _updateCalendarStateDetails.allDayPanelHeight - _allDayHeight
+  //       : 0;
+  //   if (panelHeight < 0) {
+  //     panelHeight = 0;
+  //   }
+
+  //   final double allDayExpanderHeight =
+  //       panelHeight * _allDayExpanderAnimation!.value;
+
+  //   // Calculate content width excluding scrollbar
+  //   final double contentWidth = width - SCROLLBAR_WIDTH;
+  //   return Stack(
+  //     children: <Widget>[
+  //       _addAllDayAppointmentPanel(widget.calendarTheme, isCurrentView),
+  //       Positioned(
+  //         left: isRTL ? widget.width - viewHeaderWidth : 0,
+  //         top: 0,
+  //         right: isRTL ? SCROLLBAR_WIDTH : widget.width - viewHeaderWidth,
+  //         height: actualViewHeaderHeight,
+  //         child: Container(
+  //           color: widget.calendar.viewHeaderStyle.backgroundColor ??
+  //               widget.calendarTheme.viewHeaderBackgroundColor,
+  //           child: RepaintBoundary(
+  //             child: CustomPaint(
+  //               painter: _ViewHeaderViewPainter(
+  //                   widget.visibleDates,
+  //                   widget.view,
+  //                   widget.calendar.viewHeaderStyle,
+  //                   widget.calendar.timeSlotViewSettings,
+  //                   CalendarViewHelper.getTimeLabelWidth(
+  //                       widget.calendar.timeSlotViewSettings.timeRulerSize,
+  //                       widget.view),
+  //                   actualViewHeaderHeight,
+  //                   widget.calendar.monthViewSettings,
+  //                   isRTL,
+  //                   widget.locale,
+  //                   widget.calendarTheme,
+  //                   widget.calendar.todayHighlightColor ??
+  //                       widget.calendarTheme.todayHighlightColor,
+  //                   widget.calendar.todayTextStyle,
+  //                   widget.calendar.cellBorderColor,
+  //                   widget.calendar.minDate,
+  //                   widget.calendar.maxDate,
+  //                   _viewHeaderNotifier,
+  //                   widget.textScaleFactor,
+  //                   widget.calendar.showWeekNumber,
+  //                   widget.isMobilePlatform,
+  //                   widget.calendar.weekNumberStyle,
+  //                   widget.localizations),
+  //             ),
+  //           ),
+  //         ),
+  //       ),
+  //       Positioned(
+  //         top: isDayView
+  //             ? viewHeaderHeight + allDayExpanderHeight
+  //             : viewHeaderHeight + _allDayHeight + allDayExpanderHeight,
+  //         left: 0,
+  //         right: SCROLLBAR_WIDTH, // Reserve space for external scrollbar
+  //         bottom: 0,
+  //         child: ListView(
+  //             padding: EdgeInsets.zero,
+  //             controller: _scrollController,
+  //             // thumbVisibility: !widget.isMobilePlatform,
+  //             physics: const ClampingScrollPhysics(),
+  //             children: <Widget>[
+  //               Stack(children: <Widget>[
+  //                 RepaintBoundary(
+  //                     child: _CalendarMultiChildContainer(
+  //                         width: contentWidth, // Use reduced width
+  //                         height: height,
+  //                         children: <Widget>[
+  //                       RepaintBoundary(
+  //                         child: TimeSlotWidget(
+  //                             widget.visibleDates,
+  //                             _horizontalLinesCount!,
+  //                             _timeIntervalHeight,
+  //                             timeLabelWidth,
+  //                             widget.calendar.cellBorderColor,
+  //                             widget.calendarTheme,
+  //                             widget.calendar.timeSlotViewSettings,
+  //                             isRTL,
+  //                             widget.regions,
+  //                             _calendarCellNotifier,
+  //                             widget.textScaleFactor,
+  //                             widget.calendar.timeRegionBuilder,
+  //                             width,
+  //                             height,
+  //                             widget.calendar.minDate,
+  //                             widget.calendar.maxDate),
+  //                       ),
+  //                       RepaintBoundary(
+  //                           child:
+  //                               _addAppointmentPainter(contentWidth, height)),
+  //                     ])),
+  //                 RepaintBoundary(
+  //                   child: CustomPaint(
+  //                     painter: _TimeRulerView(
+  //                         _horizontalLinesCount!,
+  //                         _timeIntervalHeight,
+  //                         widget.calendar.timeSlotViewSettings,
+  //                         widget.calendar.cellBorderColor,
+  //                         isRTL,
+  //                         widget.locale,
+  //                         widget.calendarTheme,
+  //                         CalendarViewHelper.isTimelineView(widget.view),
+  //                         widget.visibleDates,
+  //                         widget.textScaleFactor),
+  //                     size: Size(contentWidth, height),
+  //                   ),
+  //                 ),
+  //                 RepaintBoundary(
+  //                   child: CustomPaint(
+  //                     painter: _addSelectionView(),
+  //                     size: Size(width, height),
+  //                   ),
+  //                 ),
+  //                 _getCurrentTimeIndicator(
+  //                     timeLabelWidth, width, height, false),
+  //               ])
+  //             ]),
+  //       ),
+  //     ],
+  //   );
+  // }
 
   Widget _getCurrentTimeIndicator(
       double timeLabelSize, double width, double height, bool isTimelineView) {
