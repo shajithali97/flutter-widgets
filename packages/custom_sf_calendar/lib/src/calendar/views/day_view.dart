@@ -79,8 +79,7 @@ class TimeSlotWidget extends StatefulWidget {
 
   /// Defines the max date of the calendar.
   final DateTime maxDate;
-  
-  static const double SCROLLBAR_PADDING = 16.0;
+
   @override
   // ignore: library_private_types_in_public_api
   _TimeSlotWidgetState createState() => _TimeSlotWidgetState();
@@ -89,7 +88,6 @@ class TimeSlotWidget extends StatefulWidget {
 class _TimeSlotWidgetState extends State<TimeSlotWidget> {
   final List<Widget> _children = <Widget>[];
   List<TimeRegionView> _specialRegionViews = <TimeRegionView>[];
-  
 
   @override
   void initState() {
@@ -168,8 +166,8 @@ class _TimeSlotWidgetState extends State<TimeSlotWidget> {
     final int visibleDatesLength = widget.visibleDates.length;
     final DateTime endDate = AppointmentHelper.convertToEndTime(
         widget.visibleDates[visibleDatesLength - 1]);
-     final double width = widget.width - widget.timeLabelWidth - TimeSlotWidget.SCROLLBAR_PADDING;
-  final double cellWidth = width / visibleDatesLength;
+    final double width = widget.width - widget.timeLabelWidth;
+    final double cellWidth = width / visibleDatesLength;
     for (int i = 0; i < widget.specialRegion!.length; i++) {
       final CalendarTimeRegion region = widget.specialRegion![i];
       final DateTime regionStartTime = region.actualStartTime;
@@ -654,8 +652,8 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
   void paint(PaintingContext context, Offset offset) {
     RenderBox? child = firstChild;
     final bool isNeedDefaultPaint = childCount == 0;
-    final double width = size.width - timeLabelWidth - TimeSlotWidget.SCROLLBAR_PADDING;
-  final int visibleDatesCount = visibleDates.length;
+    final double width = size.width - timeLabelWidth;
+    final int visibleDatesCount = visibleDates.length;
     _cellWidth = width / visibleDatesCount;
     _minMaxExceeds(minDate, maxDate, context.canvas, visibleDatesCount);
     if (isNeedDefaultPaint) {
@@ -697,9 +695,8 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
       Canvas canvas, int visibleDatesCount) {
     final double minuteHeight = timeIntervalHeight /
         CalendarViewHelper.getTimeInterval(timeSlotViewSettings);
-    // MODIFIED: Account for scrollbar padding
-  final double viewWidth = width - timeLabelWidth - TimeSlotWidget.SCROLLBAR_PADDING;
-  final double cellWidth = viewWidth / visibleDatesCount;
+    final double viewWidth = width - timeLabelWidth;
+    final double cellWidth = viewWidth / visibleDatesCount;
 
     final int startIndex =
         DateTimeHelper.getVisibleDateIndex(visibleDates, disabledStartDate);
@@ -739,24 +736,39 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
     }
   }
 
-  void _drawDashedLine(Canvas canvas, Size size, paint) {
-    // Chage to your preferred size
-    const int dashWidth = 4;
-    const int dashSpace = 4;
+  void _drawDashedLine({
+    required Canvas canvas,
+    required Offset p1,
+    required Offset p2,
+    required int dashWidth,
+    required int dashSpace,
+    required Paint paint,
+  }) {
+    // Calculate the distance and direction
+    final double distance = (p2 - p1).distance;
+    final Offset direction = (p2 - p1) / distance;
 
-    // Start to draw from left size.
-    // Of course, you can change it to match your requirement.
-    double startX = 0;
-    double y = 10;
+    // Current position along the line
+    double currentDistance = 0;
 
-    // Repeat drawing until we reach the right edge.
-    // In our example, size.with = 300 (from the SizedBox)
-    while (startX < size.width) {
-      // Draw a small line.
-      canvas.drawLine(Offset(startX, y), Offset(startX + dashWidth, y), paint);
+    while (currentDistance < distance) {
+      // Calculate dash start position
+      final Offset dashStart = p1 + direction * currentDistance;
 
-      // Update the starting X
-      startX += dashWidth + dashSpace;
+      // Calculate dash end position
+      final double remainingDistance = distance - currentDistance;
+      final double currentDashWidth = dashWidth.toDouble();
+      final double actualDashWidth = currentDashWidth < remainingDistance
+          ? currentDashWidth
+          : remainingDistance;
+
+      final Offset dashEnd = dashStart + direction * actualDashWidth;
+
+      // Draw the dash
+      canvas.drawLine(dashStart, dashEnd, paint);
+
+      // Move to next dash position
+      currentDistance += currentDashWidth + dashSpace;
     }
   }
 
@@ -766,22 +778,27 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
     _linePainter.strokeWidth = 0.5;
     _linePainter.strokeCap = StrokeCap.round;
     _linePainter.color = cellBorderColor ?? calendarTheme.cellBorderColor!;
-
     final double startXPosition = timeLabelWidth;
-     final double endXPosition = isRTL 
-      ? size.width - timeLabelWidth 
-      : size.width - TimeSlotWidget.SCROLLBAR_PADDING;
-    for (int i = 1; i <= horizontalLinesCount; i++) {
-      // _drawDashedLine(canvas, Size(10000, 0), _linePainter);
-      canvas.drawLine(
-          Offset(startXPosition, y), Offset(endXPosition, y), _linePainter);
+    final double endXPosition =
+        isRTL ? size.width - timeLabelWidth : size.width;
 
+    // Draw horizontal dashed lines
+    for (int i = 1; i <= horizontalLinesCount; i++) {
+      _drawDashedLine(
+        canvas: canvas,
+        p1: Offset(startXPosition, y),
+        p2: Offset(endXPosition, y),
+        dashWidth: 5,
+        dashSpace: 3,
+        paint: _linePainter,
+      );
       y += timeIntervalHeight;
       if (y == size.height) {
         break;
       }
     }
 
+    // Draw vertical lines (solid)
     double x = isRTL ? _cellWidth : timeLabelWidth + _cellWidth;
     for (int i = 0; i < visibleDatesCount - 1; i++) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), _linePainter);
@@ -796,11 +813,6 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
   void _addMouseHoveringForTimeSlot(Canvas canvas, Size size) {
     const double strokeWidth = 2;
     const double padding = strokeWidth / 2;
-    // MODIFIED: Check if click is in scrollbar area
-  final double maxClickableWidth = size.width - TimeSlotWidget.SCROLLBAR_PADDING;
-  if (calendarCellNotifier.value!.dx > maxClickableWidth) {
-    return; // Don't show hover in scrollbar area
-  }
     double left = (calendarCellNotifier.value!.dx ~/ _cellWidth) * _cellWidth;
     double top = (calendarCellNotifier.value!.dy ~/ timeIntervalHeight) *
         timeIntervalHeight;
@@ -877,15 +889,9 @@ class _TimeSlotRenderObject extends CustomCalendarRenderObject {
         <CustomPainterSemantics>[];
     double left, top;
     top = 0;
-    // final double cellWidth =
-    //     (size.width - timeLabelWidth) / visibleDates.length;
-    // left = isRTL ? (size.width - timeLabelWidth) - cellWidth : timeLabelWidth;
-
-      // MODIFIED: Account for scrollbar padding in cell width calculation
-  final double cellWidth = (size.width - timeLabelWidth - TimeSlotWidget.SCROLLBAR_PADDING) / visibleDates.length;
-  
-  left = isRTL ? (size.width - timeLabelWidth - TimeSlotWidget.SCROLLBAR_PADDING) - cellWidth : timeLabelWidth;
-  
+    final double cellWidth =
+        (size.width - timeLabelWidth) / visibleDates.length;
+    left = isRTL ? (size.width - timeLabelWidth) - cellWidth : timeLabelWidth;
     final double cellHeight = timeIntervalHeight;
     final int startHour = timeSlotViewSettings.startHour.toInt();
     final int hour =

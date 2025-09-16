@@ -9,13 +9,22 @@ void main() {
 class CalendarApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(title: 'Calendar Demo', home: MyHomePage());
+    return MaterialApp(
+        title: 'Calendar Demo',
+        theme: ThemeData.light().copyWith(
+          scrollbarTheme: ScrollbarThemeData(
+            thumbColor:
+                MaterialStateProperty.all(Color(0xFF7165E3).withOpacity(0.5)),
+            thumbVisibility: MaterialStateProperty.all<bool>(true),
+          ),
+        ),
+        home: MyHomePage());
   }
 }
 
-/// The hove page which hosts the calendar
+/// The home page which hosts the calendar
 class MyHomePage extends StatefulWidget {
-  /// Creates the home page to display teh calendar widget.
+  /// Creates the home page to display the calendar widget.
   const MyHomePage({Key? key}) : super(key: key);
 
   @override
@@ -24,23 +33,233 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  late MeetingDataSource _dataSource;
+  List<String> _activityLog = [];
+  final ScrollController _logScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _dataSource = MeetingDataSource(_getDataSource());
+    _logActivity("Calendar initialized");
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        body: SfCalendar(
-      view: CalendarView.week,
-      timeSlotViewSettings: TimeSlotViewSettings(
-        timeIntervalHeight: 30,
-        timeFormat: "h:mm",
-        timeInterval: Duration(minutes: 15),
-        dayFormat: 'EEE',
+      body: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context)
+            .copyWith(scrollbars: false), // avoid auto
+
+        child: SfCalendar(
+          view: CalendarView.week,
+          firstDayOfWeek: 7,
+          timeSlotViewSettings: TimeSlotViewSettings(
+            timeInterval: const Duration(minutes: 30),
+            timeIntervalHeight: 25,
+            timeFormat: 'H:mm',
+            dayFormat: 'EEE',
+          ),
+          todayHighlightColor: Colors.purple,
+          dataSource: _dataSource,
+          onTap: _onCalendarTapped,
+          onLongPress: _onCalendarLongPressed,
+        ),
       ),
-      todayHighlightColor: Colors.purple,
-      // dataSource: MeetingDataSource(_getDataSource()),
-      // by default the month appointment display mode set as Indicator, we can
-      // change the display mode as appointment using the appointment display
-      // mode property
-    ));
+    );
+  }
+
+  void _onCalendarTapped(CalendarTapDetails details) {
+    final DateTime tappedDate = details.date!;
+    final List<dynamic> appointments = details.appointments ?? [];
+
+    if (appointments.isEmpty &&
+        details.targetElement == CalendarElement.calendarCell) {
+      // Tapped on empty space - add new activity
+      _showAddActivityDialog(tappedDate);
+      _logActivity("Tapped empty slot at ${_formatDateTime(tappedDate)}");
+    } else if (appointments.isNotEmpty) {
+      // Tapped on existing appointment
+      final Meeting meeting = appointments.first as Meeting;
+      _logActivity(
+          "Tapped appointment: '${meeting.eventName}' at ${_formatDateTime(tappedDate)}");
+      _showActivityDetails(meeting);
+    }
+  }
+
+  void _onCalendarLongPressed(CalendarLongPressDetails details) {
+    final DateTime longPressedDate = details.date!;
+    final List<dynamic> appointments = details.appointments ?? [];
+
+    if (appointments.isNotEmpty) {
+      // Long pressed on existing appointment - option to delete
+      final Meeting meeting = appointments.first as Meeting;
+      _logActivity(
+          "Long pressed appointment: '${meeting.eventName}' at ${_formatDateTime(longPressedDate)}");
+      _showDeleteConfirmation(meeting);
+    } else {
+      _logActivity(
+          "Long pressed empty slot at ${_formatDateTime(longPressedDate)}");
+    }
+  }
+
+  void _showAddActivityDialog(DateTime dateTime) {
+    final TextEditingController titleController = TextEditingController();
+    final TextEditingController descriptionController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Add Activity'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Time: ${_formatDateTime(dateTime)}'),
+              SizedBox(height: 16),
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(
+                  labelText: 'Activity Title',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              SizedBox(height: 12),
+              TextField(
+                controller: descriptionController,
+                decoration: InputDecoration(
+                  labelText: 'Description (Optional)',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (titleController.text.isNotEmpty) {
+                  _addNewActivity(dateTime, titleController.text,
+                      descriptionController.text);
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _addNewActivity(DateTime startTime, String title, String description) {
+    final Meeting newMeeting = Meeting(
+      title,
+      startTime,
+      startTime.add(Duration(hours: 1)),
+      Colors.blue,
+      false,
+    );
+
+    _dataSource.appointments!.add(newMeeting);
+    _dataSource.notifyListeners(CalendarDataSourceAction.add, [newMeeting]);
+
+    _logActivity("Added activity: '$title' at ${_formatDateTime(startTime)}");
+  }
+
+  void _showActivityDetails(Meeting meeting) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(meeting.eventName),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Start: ${_formatDateTime(meeting.from)}'),
+              Text('End: ${_formatDateTime(meeting.to)}'),
+              SizedBox(height: 8),
+              Text(
+                  'Duration: ${meeting.to.difference(meeting.from).inMinutes} minutes'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeleteConfirmation(Meeting meeting) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Delete Activity'),
+          content:
+              Text('Are you sure you want to delete "${meeting.eventName}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                _deleteActivity(meeting);
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteActivity(Meeting meeting) {
+    _dataSource.appointments!.remove(meeting);
+    _dataSource.notifyListeners(CalendarDataSourceAction.remove, [meeting]);
+    _logActivity(
+        "Deleted activity: '${meeting.eventName}' from ${_formatDateTime(meeting.from)}");
+  }
+
+  void _logActivity(String activity) {
+    setState(() {
+      final String timestamp = DateTime.now().toString().substring(11, 19);
+      _activityLog.add("[$timestamp] $activity");
+    });
+
+    // Auto-scroll to bottom of log
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_logScrollController.hasClients) {
+        _logScrollController.animateTo(
+          0.0,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _clearLog() {
+    setState(() {
+      _activityLog.clear();
+    });
+    _logActivity("Activity log cleared");
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return "${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
   }
 
   List<Meeting> _getDataSource() {
