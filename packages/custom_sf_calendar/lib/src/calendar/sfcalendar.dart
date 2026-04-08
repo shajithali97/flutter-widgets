@@ -221,6 +221,7 @@ class SfCalendar extends StatefulWidget {
     this.onDragStart,
     this.onDragUpdate,
     this.onDragEnd,
+    this.allowPartialAppointmentTap = false,
   })  : assert(firstDayOfWeek >= 1 && firstDayOfWeek <= 7),
         assert(headerHeight >= 0),
         assert(viewHeaderHeight >= -1),
@@ -2165,6 +2166,31 @@ class SfCalendar extends StatefulWidget {
   /// }
   final AppointmentDragEndCallback? onDragEnd;
 
+  /// Determines whether the appointment can be tapped when it is partially
+  /// visible in the [SfCalendar].
+  ///
+  /// If it is set to `true`, the appointment will be tappable even if it is
+  /// partially visible in the [SfCalendar].
+  ///
+  /// If it is set to `false`, the appointment will be tappable only if it is
+  /// fully visible in the [SfCalendar].
+  ///
+  /// Defaults to `false`.
+  ///
+  /// ```dart
+  ///
+  /// Widget build(BuildContext context) {
+  ///    return Container(
+  ///      child: SfCalendar(
+  ///        view: CalendarView.day,
+  ///        allowPartialAppointmentTap: true,
+  ///      ),
+  ///    );
+  ///  }
+  ///
+  /// ```
+  final bool allowPartialAppointmentTap;
+
   /// An object that used for programmatic date navigation and date selection
   /// in [SfCalendar].
   ///
@@ -2498,6 +2524,8 @@ class SfCalendar extends StatefulWidget {
     properties.add(viewHeaderStyle.toDiagnosticsNode(name: 'viewHeaderStyle'));
     properties.add(
         timeSlotViewSettings.toDiagnosticsNode(name: 'timeSlotViewSettings'));
+    properties.add(DiagnosticsProperty<bool>(
+        'allowPartialAppointmentTap', allowPartialAppointmentTap));
     properties.add(
         resourceViewSettings.toDiagnosticsNode(name: 'resourceViewSettings'));
     properties
@@ -4155,9 +4183,9 @@ class _SfCalendarState extends State<SfCalendar>
           _canScrollTimeSlotView = true;
         }
 
-        if( _fadeInController != null){
+        if (_fadeInController != null) {
           _fadeInController!.reset();
-        _fadeInController!.forward();
+          _fadeInController!.forward();
         }
         _agendaScrollController = ScrollController();
         SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -4211,9 +4239,9 @@ class _SfCalendarState extends State<SfCalendar>
             return;
           }
 
-          if(_fadeInController != null){
+          if (_fadeInController != null) {
             _fadeInController!.reset();
-          _fadeInController!.forward();
+            _fadeInController!.forward();
           }
           setState(() {
             _currentDate = _controller.displayDate!;
@@ -4244,9 +4272,9 @@ class _SfCalendarState extends State<SfCalendar>
             return;
           }
 
-         if(_fadeInController != null){
+          if (_fadeInController != null) {
             _fadeInController!.reset();
-          _fadeInController!.forward();
+            _fadeInController!.forward();
           }
           setState(() {
             _currentDate = _controller.displayDate!;
@@ -4277,9 +4305,9 @@ class _SfCalendarState extends State<SfCalendar>
             return;
           }
 
-          if(_fadeInController != null){
+          if (_fadeInController != null) {
             _fadeInController!.reset();
-          _fadeInController!.forward();
+            _fadeInController!.forward();
           }
           setState(() {
             _currentDate = _controller.displayDate!;
@@ -10777,7 +10805,7 @@ class _AppointmentViewHeaderRenderObject extends RenderStack {
   ScrollableState? _scrollableState;
 
   /// Current view port.
-  RenderAbstractViewport get _stackViewPort => RenderAbstractViewport.of(this)!;
+  RenderAbstractViewport get _stackViewPort => RenderAbstractViewport.of(this);
 
   ScrollableState? get scrollableState => _scrollableState;
 

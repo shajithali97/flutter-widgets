@@ -9688,16 +9688,17 @@ class _CalendarViewState extends State<_CalendarView>
           (yPosition < allDayHeight - kAllDayAppointmentHeight ||
               _updateCalendarStateDetails.allDayPanelHeight <= allDayHeight ||
               appointmentView.position + 1 >= appointmentView.maxPositions)) {
-        if (!CalendarViewHelper.isDateTimeWithInDateTimeRange(
-                widget.calendar.minDate,
-                widget.calendar.maxDate,
-                appointmentView.appointment!.actualStartTime,
-                timeInterval) ||
-            !CalendarViewHelper.isDateTimeWithInDateTimeRange(
-                widget.calendar.minDate,
-                widget.calendar.maxDate,
-                appointmentView.appointment!.actualEndTime,
-                timeInterval)) {
+        if (!widget.calendar.allowPartialAppointmentTap &&
+            (!CalendarViewHelper.isDateTimeWithInDateTimeRange(
+                    widget.calendar.minDate,
+                    widget.calendar.maxDate,
+                    appointmentView.appointment!.actualStartTime,
+                    timeInterval) ||
+                !CalendarViewHelper.isDateTimeWithInDateTimeRange(
+                    widget.calendar.minDate,
+                    widget.calendar.maxDate,
+                    appointmentView.appointment!.actualEndTime,
+                    timeInterval))) {
           return null;
         }
         if (selectedDate != null) {
